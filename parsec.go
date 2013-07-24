@@ -52,33 +52,20 @@ func Bind(p Parser, f func(Any) Parser) Parser {
 	var ret = func(str string) []Res {
 		result := p(str)
 		var totalResults = len(result)
+
 		if totalResults == 0 {
 			return result
 		}
-		var tempArray = make([][]Res, totalResults, totalResults)
-		validCount := 0
-		totalCount := 0
+
 		for _, res := range result {
 			rest := res.str
 			parseResult := res.a
 			parser := f(parseResult)
 			r1 := parser(rest)
-			if len(r1) == 0 {
-				continue
-			}
-			tempArray[validCount] = r1
-			validCount++
-			totalCount += len(r1)
+			if len(r1) == 0 {continue}
+			return r1[0:1]
 		}
-		var finalArray = make([]Res, totalCount, totalCount)
-		i:=0
-		for _, ta := range tempArray {
-			for _, r := range ta {
-				finalArray[i] = r
-				i++
-			}
-		}
-		return finalArray
+		return []Res{}
 	}
 	return ret
 }
