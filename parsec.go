@@ -1,7 +1,6 @@
 package parsec
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -63,7 +62,7 @@ func Bind(p Parser, f func(Any) Parser) Parser {
 			parser := f(parseResult)
 			r1 := parser(rest)
 			if len(r1) == 0 {continue}
-			return r1[0:1]
+			return r1[0:1] //Ignoring other successful results
 		}
 		return []Res{}
 	}
@@ -139,22 +138,21 @@ func AlphaNum() Parser {
 }
 
 func Word() Parser {
-	neWord := Bind(Letter(), func (c Any) Parser {
-		return Bind(Word(), func(cs Any) Parser {
-			r := c.(rune)
-			str := cs.(string)
-			return Result(fmt.Sprintf("%c%s",r,str))
-
-		})
-	})
-
-	p := Plus (neWord, Result(""))
-	return p
+	return Many(Letter())
 }
 
 
 func Many(p Parser) Parser {
-	abc := Zero()
-	q := Plus(abc, Result([]Any{}))
+	neWord := Bind(p, func (x Any) Parser {
+		return Bind(Many(p), func(as Any) Parser {
+			xs := as.([]Any)
+			slice := make([]Any, len(xs) + 1 )
+			slice[0] = x
+			copy(slice[1:], xs)
+			return Result(slice)
+
+		})
+	})
+	q := Plus(neWord, Result([]Any{}))
 	return q
 }
