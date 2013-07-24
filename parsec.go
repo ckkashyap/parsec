@@ -55,8 +55,9 @@ func Bind(p Parser, f func(Any) Parser) Parser {
 		if totalResults == 0 {
 			return result
 		}
-		var tempArray = make([]Res, totalResults, totalResults)
+		var tempArray = make([][]Res, totalResults, totalResults)
 		validCount := 0
+		totalCount := 0
 		for _, res := range result {
 			rest := res.str
 			parseResult := res.a
@@ -65,13 +66,19 @@ func Bind(p Parser, f func(Any) Parser) Parser {
 			if len(r1) == 0 {
 				continue
 			}
-			if len(r1) != 1 {
-				fmt.Printf("THIS WAS NOT MEANT TO HAPPEN\n")
-			}
-			tempArray[validCount] = r1[0]
+			tempArray[validCount] = r1
 			validCount++
+			totalCount += len(r1)
 		}
-		return tempArray[0:validCount]
+		var finalArray = make([]Res, totalCount, totalCount)
+		i:=0
+		for _, ta := range tempArray {
+			for _, r := range ta {
+				finalArray[i] = r
+				i++
+			}
+		}
+		return finalArray
 	}
 	return ret
 }
@@ -137,4 +144,30 @@ func Plus(p1, p2 Parser) Parser {
 func Letter() Parser {
 	p := Plus(Lower(), Upper())
 	return p
+}
+
+func AlphaNum() Parser {
+	p := Plus(Letter(), Digit())
+	return p
+}
+
+func Word() Parser {
+	neWord := Bind(Letter(), func (c Any) Parser {
+		return Bind(Word(), func(cs Any) Parser {
+			r := c.(rune)
+			str := cs.(string)
+			return Result(fmt.Sprintf("%c%s",r,str))
+
+		})
+	})
+
+	p := Plus (neWord, Result(""))
+	return p
+}
+
+
+func Many(p Parser) Parser {
+	abc := Zero()
+	q := Plus(abc, Result([]Any{}))
+	return q
 }
