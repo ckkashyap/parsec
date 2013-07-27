@@ -55,6 +55,7 @@ func Item() Parser {
 		go func () {
 			rdr := strings.NewReader(str)
 			r, idx, _ := rdr.ReadRune()
+			fmt.Printf("ReadRune called\n")
 			if idx == 0 {
 				close(c)
 			}else{
@@ -110,6 +111,7 @@ func Plus(p1, p2 Parser) Parser {
 
 
 func Satisfy(s func(rune) bool) Parser {
+
 	var f = func(x A) Parser {
 		r := x.(Tup).Thing.(rune)
 		if s(r) {
@@ -152,6 +154,7 @@ func Upper() Parser {
 
 }
 
+var Counter int
 
 func Letter() Parser {
 	p := Plus(Lower(), Upper())
