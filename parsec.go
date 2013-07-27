@@ -55,7 +55,6 @@ func Item() Parser {
 		go func () {
 			rdr := strings.NewReader(str)
 			r, idx, _ := rdr.ReadRune()
-			fmt.Printf("ReadRune called\n")
 			if idx == 0 {
 				close(c)
 			}else{
@@ -154,8 +153,6 @@ func Upper() Parser {
 
 }
 
-var Counter int
-
 func Letter() Parser {
 	p := Plus(Lower(), Upper())
 	return p
@@ -168,16 +165,13 @@ func AlphaNum() Parser {
 
 func Many(p Parser) Parser {
 	p1 := Bind(p, func (x A) Parser {
-		//theRune :=  x.(Tup).Thing.(rune)
 		theTuple :=  x.(Tup)
-		p2 := Bind(Many(p), func(xs A) Parser {
+		return Bind(Many(p), func(xs A) Parser {
 			c := make(chan A)
 			inpChanPrime := xs.(Tup).Thing.(chan A)
 			go func(){
-				//c <- theRune
 				c <- theTuple
 				for r := range inpChanPrime {
-					//r1 := r.(rune)
 					r1 := r.(Tup)
 					c <- r1
 				}
@@ -187,7 +181,6 @@ func Many(p Parser) Parser {
 			return Result(c)
 			
 		})
-		return p2
 	})
 
 	c := make(chan A)
@@ -199,3 +192,21 @@ func Many(p Parser) Parser {
 	return Plus(p1, Result(c))
 }
 
+func Ident() Parser {
+	return Bind (Lower(), func (x A) Parser {
+		theTuple := x.(Tup)
+		return Bind(Many(AlphaNum()), func(xs A) Parser{
+			c := make(chan A)
+			inpChanPrime := xs.(Tup).Thing.(chan A)
+			go func() {
+				c <- theTuple
+				for r := range inpChanPrime {
+					r1 := r.(Tup)
+					c <- r1
+				}
+				close(c)
+			}()
+			return Result(c)
+		})
+	})
+}
