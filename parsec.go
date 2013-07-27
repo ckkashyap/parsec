@@ -210,3 +210,35 @@ func Ident() Parser {
 		})
 	})
 }
+
+
+func StringParser(str string) Parser{
+	if str == "" {
+		c := make(chan A)
+		go func(){
+			c <- Tup{Valid:false}
+			close(c)
+		}()
+		return Result(c)
+	}
+
+	rdr := strings.NewReader(str)
+	r, idx, _ := rdr.ReadRune()
+
+	return Bind(Rune(r), func (x A) Parser {
+		theTuple := x.(Tup)
+		return Bind(StringParser(str[idx:]), func (xs A) Parser {
+			c := make(chan A)
+			inpChanPrime := xs.(Tup).Thing.(chan A)
+			go func() {
+				c <- theTuple
+				for r := range inpChanPrime {
+					r1 := r.(Tup)
+					c <- r1
+				}
+				close(c)
+			}()
+			return Result(c)
+		})
+	})
+}
