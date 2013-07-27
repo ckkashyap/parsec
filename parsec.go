@@ -10,11 +10,16 @@ type A interface{}
 type Tup struct {
 	Thing A
 	Remaining string
+	Valid bool
 }
 
 
 func (t Tup)String() string{
-	return fmt.Sprintf("Thing=%v, Remaining=%s", t.Thing, t.Remaining)
+	if t.Valid {
+		return fmt.Sprintf("Thing=%v, Remaining=%s", t.Thing, t.Remaining)
+	} else {
+		return "TERM"
+	}
 }
 
 type Parser func(string) chan A
@@ -23,7 +28,7 @@ func Result(a A) Parser {
 	var ret = func(str string) chan A {
 		c := make(chan A)
 		go func () {
-			c <- Tup{a, str}
+			c <- Tup{a, str, true}
 			close(c)
 		}()
 		return c
@@ -53,7 +58,7 @@ func Item() Parser {
 			if idx == 0 {
 				close(c)
 			}else{
-				c <- Tup{r, str[idx:]}
+				c <- Tup{r, str[idx:], true}
 				close(c)
 			}
 		}()
@@ -160,14 +165,17 @@ func AlphaNum() Parser {
 
 func Many(p Parser) Parser {
 	p1 := Bind(p, func (x A) Parser {
-		theRune :=  x.(Tup).Thing.(rune)
+		//theRune :=  x.(Tup).Thing.(rune)
+		theTuple :=  x.(Tup)
 		p2 := Bind(Many(p), func(xs A) Parser {
 			c := make(chan A)
 			inpChanPrime := xs.(Tup).Thing.(chan A)
 			go func(){
-				c <- theRune
+				//c <- theRune
+				c <- theTuple
 				for r := range inpChanPrime {
-					r1 := r.(rune)
+					//r1 := r.(rune)
+					r1 := r.(Tup)
 					c <- r1
 				}
 				close(c)
@@ -181,7 +189,7 @@ func Many(p Parser) Parser {
 
 	c := make(chan A)
 	go func(){
-		c <- rune(0)
+		c <- Tup{Valid:false}
 		close(c)
 	}()
 	
