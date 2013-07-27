@@ -2,84 +2,120 @@ package parsec
 
 import (
 	"strings"
+	"fmt"
 )
 
-type Any interface{}
+type A interface{}
 
-type Res struct {
-	a   Any
-	str string
+type Tup struct {
+	Thing A
+	Remaining string
 }
 
 
-func (t Res)GetResult() Any {
-	return t.a
-}
-func (t Res)GetRest() string {
-	return t.str
+func (t Tup)String() string{
+	return fmt.Sprintf("Thing=%v, Remaining=%s", t.Thing, t.Remaining)
 }
 
-type Parser func(string) []Res
+type Parser func(string) chan A
 
-func Result(a Any) Parser {
-	var ret = func(str string) []Res {
-		return []Res{{a, str}}
+func Result(a A) Parser {
+	var ret = func(str string) chan A {
+		c := make(chan A)
+		go func () {
+			c <- Tup{a, str}
+			close(c)
+		}()
+		return c
 	}
 	return ret
 }
+
 
 func Zero() Parser {
-	var ret = func(str string) []Res {
-		return []Res{}
+	var ret = func(str string) chan A {
+		c := make(chan A)
+		go func () {
+			close (c)
+		}()
+		return c
 	}
 	return ret
 }
+
 
 func Item() Parser {
-	var ret = func(str string) []Res {
-		r := strings.NewReader(str)
-		c, s, _ := r.ReadRune()
-		if s == 0 {
-			return []Res{}
-		}
-		return []Res{{c, str[s:]}}
+	var ret = func(str string) chan A {
+		c := make(chan A)
+		go func () {
+			rdr := strings.NewReader(str)
+			r, idx, _ := rdr.ReadRune()
+			if idx == 0 {
+				close(c)
+			}else{
+				c <- Tup{r, str[idx:]}
+				close(c)
+			}
+		}()
+		return c
 	}
 	return ret
 }
 
-func Bind(p Parser, f func(Any) Parser) Parser {
-	var ret = func(str string) []Res {
-		result := p(str)
-		var totalResults = len(result)
 
-		if totalResults == 0 {
-			return result
-		}
-
-		for _, res := range result {
-			rest := res.str
-			parseResult := res.a
-			parser := f(parseResult)
-			r1 := parser(rest)
-			if len(r1) == 0 {continue}
-			return r1[0:1] //Ignoring other successful results
-		}
-		return []Res{}
+func Bind(p Parser, f func(A) Parser) Parser {
+	var ret = func(str string) chan A {
+		channel := make(chan A)
+		go func () {
+			r1 := p(str)
+			for eachR1 := range r1 {
+				parser := f(eachR1)
+				r2 := parser(eachR1.(Tup).Remaining)
+				for eachR2 := range r2 {
+					channel <-eachR2
+				}
+			}
+			close(channel)
+		}()
+		return channel
 	}
 	return ret
 }
+
+
+
+
+func Plus(p1, p2 Parser) Parser {
+	var ret = func(str string) chan A {
+		channel := make(chan A)
+		go func () {
+			for r := range p1(str) {
+				channel<-r
+			}
+			for r := range p2(str) {
+				channel<-r
+			}
+			close(channel)
+
+		}()
+		return channel
+	}
+	return ret
+}
+
 
 func Satisfy(s func(rune) bool) Parser {
-	var f = func(x Any) Parser {
-		r := x.(rune)
+	var f = func(x A) Parser {
+		r := x.(Tup).Thing.(rune)
 		if s(r) {
-			return Result(x)
+			return Result(r)
 		} else {
 			return Zero()
 		}
 	}
 	return Bind(Item(), f)
 }
+
 
 func Rune(r rune) Parser {
 	var f = func(x rune) bool {
@@ -111,21 +147,6 @@ func Upper() Parser {
 
 }
 
-func Plus(p1, p2 Parser) Parser {
-	var ret = func(str string) []Res {
-		r1 := p1(str)
-		r2 := p2(str)
-			lr1 := len(r1)
-			lr2 := len(r2)
-		slice := make([]Res, lr1 + lr2)
-		copy(slice, r1)
-		copy(slice[lr1:], r2)
-		return slice
-	}
-	return ret
-}
-
-
 
 func Letter() Parser {
 	p := Plus(Lower(), Upper())
@@ -137,22 +158,33 @@ func AlphaNum() Parser {
 	return p
 }
 
-func Word() Parser {
-	return Many(Letter())
-}
-
-
 func Many(p Parser) Parser {
-	neWord := Bind(p, func (x Any) Parser {
-		return Bind(Many(p), func(as Any) Parser {
-			xs := as.([]Any)
-			slice := make([]Any, len(xs) + 1 )
-			slice[0] = x
-			copy(slice[1:], xs)
-			return Result(slice)
+	p1 := Bind(p, func (x A) Parser {
+		theRune :=  x.(Tup).Thing.(rune)
+		p2 := Bind(Many(p), func(xs A) Parser {
+			c := make(chan A)
+			inpChanPrime := xs.(Tup).Thing.(chan A)
+			go func(){
+				c <- theRune
+				for r := range inpChanPrime {
+					r1 := r.(rune)
+					c <- r1
+				}
+				close(c)
+			}()
 
+			return Result(c)
+			
 		})
+		return p2
 	})
-	q := Plus(neWord, Result([]Any{}))
-	return q
+
+	c := make(chan A)
+	go func(){
+		c <- rune(0)
+		close(c)
+	}()
+	
+	return Plus(p1, Result(c))
 }
+
