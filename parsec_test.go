@@ -79,3 +79,37 @@ func Test_Rune(test *testing.T) {
 		ctr++
 	}
 }
+
+func Test_Runes(test *testing.T) {
+	//Create a parser by composing 2 parsers. Using simple parsers
+	//that can parse just one rune each, a complex parser that
+	//parses both the runes can be built using the Bind function.
+	p1:=Rune('A')
+	p2:=Rune('B')
+	p := Bind(p1,func (x1 A) Parser {
+		return Bind(p2, func (x2 A) Parser {
+			return func (str string) chan A {
+				c := make(chan A)
+				r1 := (x1.(Tup).Thing.(rune))
+				r2 := (x2.(Tup).Thing.(rune))
+				go func () {
+					c <- r1
+					c <- r2
+					close (c)
+				}()
+				return c
+			}
+		})
+	})
+
+	result := p("ABC")
+	runes := []rune{'A', 'B'}
+
+	i := 0
+	for r := range result {
+		if r != runes[i] {
+			test.Fatalf("Expected %c, got %c", runes[i], r)
+		}
+		i++
+	}
+}
